@@ -1,583 +1,279 @@
-# chess_game.py
-# لعبة شطرنج محلية لشخصين باستخدام Pygame
-# متطلبات: Python 3.8+ و pygame
+<!DOCTYPE html>
+<html lang="ar" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abd Erraouf</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-import pygame
-import sys
-from copy import deepcopy
+  :root {
+    --gold: #C9A84C;
+    --coral: #FF6B6B;
+    --teal: #00C9A7;
+    --purple: #845EC2;
+    --bg1: #0F2027;
+    --bg2: #203A43;
+    --bg3: #2C5364;
+  }
 
-# إعدادات العرض
-WIDTH, HEIGHT = 640, 640
-SQUARE_SIZE = WIDTH // 8
-FPS = 60
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--bg1), var(--bg2), var(--bg3));
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+    position: relative;
+  }
 
-# ألوان
-WHITE = (245, 245, 220)
-BLACK = (60, 60, 60)
-HIGHLIGHT = (50, 205, 50, 120)
-MOVE_HIGHLIGHT = (30, 144, 255, 160)
-SELECT_COLOR = (255, 215, 0, 180)
-CHECK_COLOR = (255, 69, 0, 180)
+  /* Animated blobs */
+  .blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.18;
+    animation: drift 10s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  .blob1 { width: 400px; height: 400px; background: var(--teal); top: -100px; left: -100px; animation-delay: 0s; }
+  .blob2 { width: 350px; height: 350px; background: var(--coral); bottom: -80px; right: -80px; animation-delay: 3s; }
+  .blob3 { width: 280px; height: 280px; background: var(--gold); top: 50%; left: 60%; animation-delay: 6s; }
 
-pygame.init()
-FONT = pygame.font.SysFont('arial', 24)
-SMALL_FONT = pygame.font.SysFont('arial', 18)
+  @keyframes drift {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(40px, 30px) scale(1.1); }
+  }
 
-# مساعدة لتحويل إحداثيات
-def pos_to_coord(pos):
-    x, y = pos
-    return x // SQUARE_SIZE, y // SQUARE_SIZE
+  /* Grid overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
 
-def coord_to_pos(coord):
-    x, y = coord
-    return x * SQUARE_SIZE, y * SQUARE_SIZE
+  .card {
+    position: relative;
+    z-index: 10;
+    width: min(420px, 92vw);
+    padding: 48px 32px 44px;
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: 32px;
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+    text-align: center;
+    animation: rise 0.8s cubic-bezier(0.22,1,0.36,1) both;
+  }
 
-# =========================
-# تعريف القطع (OOP)
-# =========================
-class Piece:
-    def __init__(self, color):
-        self.color = color  # 'w' أو 'b'
-        self.has_moved = False
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(40px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
 
-    def symbol(self):
-        return '?'
+  /* Avatar */
+  .avatar-wrap {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 20px;
+  }
+  .avatar-ring {
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    background: conic-gradient(var(--gold), var(--coral), var(--teal), var(--gold));
+    padding: 3px;
+    animation: spin 6s linear infinite;
+    display: flex; align-items: center; justify-content: center;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .avatar-inner {
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1a2a3a, #2c4a5a);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    color: var(--gold);
+    letter-spacing: 2px;
+  }
 
-    def possible_moves(self, board, x, y):
-        # تُعيد قائمة من الإحداثيات (tx, ty) الممكنة نظريًا دون التحقق من الكش
-        return []
+  /* Sparkles */
+  .sparkle {
+    position: absolute;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    animation: sparkle 2s ease-in-out infinite;
+  }
+  .sparkle:nth-child(1) { background: var(--teal);  top: 0; right: 8px;  animation-delay: 0s; }
+  .sparkle:nth-child(2) { background: var(--coral); bottom: 4px; left: 4px; animation-delay: 0.7s; }
+  .sparkle:nth-child(3) { background: var(--gold);  top: 10px; left: -4px; animation-delay: 1.4s; }
+  @keyframes sparkle {
+    0%,100% { opacity: 0; transform: scale(0); }
+    50%      { opacity: 1; transform: scale(1.4); }
+  }
 
-    def enemy(self):
-        return 'b' if self.color == 'w' else 'w'
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    animation: rise 0.8s 0.15s cubic-bezier(0.22,1,0.36,1) both;
+  }
+  .tagline {
+    font-size: 13px;
+    color: rgba(255,255,255,0.45);
+    margin-bottom: 36px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    animation: rise 0.8s 0.22s cubic-bezier(0.22,1,0.36,1) both;
+  }
 
-class King(Piece):
-    def symbol(self):
-        return 'K' if self.color == 'w' else 'k'
+  /* Links */
+  .links { display: flex; flex-direction: column; gap: 14px; }
 
-    def possible_moves(self, board, x, y):
-        moves = []
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                if dx == 0 and dy == 0:
-                    continue
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < 8 and 0 <= ny < 8:
-                    target = board.grid[ny][nx]
-                    if target is None or target.color != self.color:
-                        moves.append((nx, ny))
-        # التبييت (Castling)
-        if not self.has_moved and not board.is_in_check(self.color):
-            # قلعة جهة الملك (king-side)
-            # شروط: الرخ في مكانه، لم يتحرك، المربعات بينهما فارغة، والمربعات التي يمر بها الملك ليست تحت هجوم
-            # الملك الأبيض: e1 -> g1 (x:4->6), rook at h1 (x:7)
-            # نتحقق ديناميكياً
-            # جهة الملك
-            if self._can_castle(board, x, y, king_side=True):
-                moves.append((x + 2, y))
-            # جهة الوزير
-            if self._can_castle(board, x, y, king_side=False):
-                moves.append((x - 2, y))
-        return moves
+  .link-btn {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.25s cubic-bezier(0.22,1,0.36,1),
+                box-shadow 0.25s ease,
+                border-color 0.25s ease;
+    animation: rise 0.8s cubic-bezier(0.22,1,0.36,1) both;
+  }
+  .link-btn:nth-child(1) { animation-delay: 0.3s; }
+  .link-btn:nth-child(2) { animation-delay: 0.42s; }
+  .link-btn:nth-child(3) { animation-delay: 0.54s; }
 
-    def _can_castle(self, board, x, y, king_side=True):
-        row = y
-        if king_side:
-            rook_x = 7
-            step = 1
-            path = [(x + 1, row), (x + 2, row)]
-        else:
-            rook_x = 0
-            step = -1
-            path = [(x - 1, row), (x - 2, row), (x - 3, row)]
-        rook = board.grid[row][rook_x]
-        if not rook or not isinstance(rook, Rook) or rook.color != self.color or rook.has_moved:
-            return False
-        # تحقق أن المربعات بين الملك والرخ فارغة
-        for px, py in path:
-            if board.grid[py][px] is not None:
-                return False
-        # تحقق أن المربعات التي يمر بها الملك ليست تحت هجوم
-        # الملك لا يمكن أن يمر عبر مربع تحت هجوم
-        check_squares = [(x + step, row), (x + 2*step, row)] if king_side else [(x - 1, row), (x - 2, row)]
-        for sx, sy in check_squares:
-            # مؤقت: نضع الملك مؤقتًا في المربع ونفحص الهجوم
-            temp_board = deepcopy(board)
-            temp_board.grid[y][x] = None
-            temp_board.grid[sy][sx] = King(self.color)
-            if temp_board.is_square_attacked(sx, sy, self.enemy()):
-                return False
-        return True
+  .link-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .link-btn.ig1::before  { background: linear-gradient(135deg, rgba(225,48,108,0.18), rgba(88,81,219,0.18)); }
+  .link-btn.ig2::before  { background: linear-gradient(135deg, rgba(88,81,219,0.18), rgba(225,48,108,0.18)); }
+  .link-btn.tt::before   { background: linear-gradient(135deg, rgba(0,201,167,0.18), rgba(201,168,76,0.18)); }
 
-class Queen(Piece):
-    def symbol(self):
-        return 'Q' if self.color == 'w' else 'q'
+  .link-btn:hover { transform: translateY(-3px) scale(1.01); }
+  .link-btn.ig1:hover { box-shadow: 0 12px 40px rgba(225,48,108,0.3); border-color: rgba(225,48,108,0.4); }
+  .link-btn.ig2:hover { box-shadow: 0 12px 40px rgba(88,81,219,0.3); border-color: rgba(88,81,219,0.4); }
+  .link-btn.tt:hover  { box-shadow: 0 12px 40px rgba(0,201,167,0.3); border-color: rgba(0,201,167,0.4); }
+  .link-btn:hover::before { opacity: 1; }
 
-    def possible_moves(self, board, x, y):
-        return Rook(self.color).possible_moves(board, x, y) + Bishop(self.color).possible_moves(board, x, y)
+  .icon-wrap {
+    width: 48px; height: 48px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 22px;
+  }
+  .ig1 .icon-wrap { background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
+  .ig2 .icon-wrap { background: linear-gradient(225deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
+  .tt  .icon-wrap { background: #000; border: 1px solid rgba(255,255,255,0.2); }
 
-class Rook(Piece):
-    def symbol(self):
-        return 'R' if self.color == 'w' else 'r'
+  .link-text { text-align: left; flex: 1; position: relative; z-index: 1; }
+  .link-name { font-size: 15px; font-weight: 500; color: #fff; }
+  .link-handle { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 2px; }
 
-    def possible_moves(self, board, x, y):
-        moves = []
-        for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]:
-            nx, ny = x + dx, y + dy
-            while 0 <= nx < 8 and 0 <= ny < 8:
-                target = board.grid[ny][nx]
-                if target is None:
-                    moves.append((nx, ny))
-                else:
-                    if target.color != self.color:
-                        moves.append((nx, ny))
-                    break
-                nx += dx; ny += dy
-        return moves
+  .arrow {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    color: rgba(255,255,255,0.5);
+    transition: background 0.2s, color 0.2s, transform 0.25s;
+    flex-shrink: 0;
+    position: relative; z-index: 1;
+  }
+  .link-btn:hover .arrow {
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    transform: translateX(3px);
+  }
 
-class Bishop(Piece):
-    def symbol(self):
-        return 'B' if self.color == 'w' else 'b'
+  /* TikTok SVG icon */
+  .tiktok-icon { width: 22px; height: 22px; }
+</style>
+</head>
+<body>
 
-    def possible_moves(self, board, x, y):
-        moves = []
-        for dx, dy in [(1,1),(1,-1),(-1,1),(-1,-1)]:
-            nx, ny = x + dx, y + dy
-            while 0 <= nx < 8 and 0 <= ny < 8:
-                target = board.grid[ny][nx]
-                if target is None:
-                    moves.append((nx, ny))
-                else:
-                    if target.color != self.color:
-                        moves.append((nx, ny))
-                    break
-                nx += dx; ny += dy
-        return moves
+<div class="blob blob1"></div>
+<div class="blob blob2"></div>
+<div class="blob blob3"></div>
 
-class Knight(Piece):
-    def symbol(self):
-        return 'N' if self.color == 'w' else 'n'
+<div class="card">
+  <div class="avatar-wrap">
+    <div class="avatar-ring">
+      <div class="avatar-inner">AE</div>
+    </div>
+    <span class="sparkle"></span>
+    <span class="sparkle"></span>
+    <span class="sparkle"></span>
+  </div>
 
-    def possible_moves(self, board, x, y):
-        moves = []
-        for dx, dy in [(1,2),(2,1),(2,-1),(1,-2),(-1,-2),(-2,-1),(-2,1),(-1,2)]:
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < 8 and 0 <= ny < 8:
-                target = board.grid[ny][nx]
-                if target is None or target.color != self.color:
-                    moves.append((nx, ny))
-        return moves
+  <h1>Abd Erraouf</h1>
+  <p class="tagline">Find me everywhere</p>
 
-class Pawn(Piece):
-    def symbol(self):
-        return 'P' if self.color == 'w' else 'p'
+  <div class="links">
 
-    def possible_moves(self, board, x, y):
-        moves = []
-        direction = -1 if self.color == 'w' else 1
-        start_row = 6 if self.color == 'w' else 1
-        # خطوة واحدة للأمام
-        nx, ny = x, y + direction
-        if 0 <= ny < 8 and board.grid[ny][nx] is None:
-            moves.append((nx, ny))
-            # خطوة مزدوجة من الصف الابتدائي
-            ny2 = y + 2*direction
-            if y == start_row and board.grid[ny2][nx] is None:
-                moves.append((nx, ny2))
-        # أكل قطعتين قطريًا
-        for dx in (-1, 1):
-            cx, cy = x + dx, y + direction
-            if 0 <= cx < 8 and 0 <= cy < 8:
-                target = board.grid[cy][cx]
-                if target is not None and target.color != self.color:
-                    moves.append((cx, cy))
-        # الأسر بالتجاوز (en passant)
-        if board.en_passant_target:
-            ex, ey = board.en_passant_target
-            if ey == y + direction and abs(ex - x) == 1:
-                moves.append((ex, ey))
-        return moves
+    <a href="https://instagram.com/abd_erraouf12" class="link-btn ig1" target="_blank">
+      <div class="icon-wrap">
+        <svg viewBox="0 0 24 24" fill="white" width="22" height="22"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+      </div>
+      <div class="link-text">
+        <div class="link-name">Instagram</div>
+        <div class="link-handle">@abd_erraouf12</div>
+      </div>
+      <div class="arrow">→</div>
+    </a>
 
-# =========================
-# لوحة الشطرنج (Board)
-# =========================
-class Board:
-    def __init__(self):
-        # grid[row][col] حيث row 0 أعلى (صف 8 في الشطرنج) و row 7 أسفل (صف 1)
-        self.grid = [[None for _ in range(8)] for _ in range(8)]
-        self.en_passant_target = None  # مربع هدف الأسر بالتجاوز (x,y) أو None
-        self.halfmove_clock = 0
-        self.fullmove_number = 1
-        self.setup_starting_position()
+    <a href="https://instagram.com/abd.erraouf12" class="link-btn ig2" target="_blank">
+      <div class="icon-wrap">
+        <svg viewBox="0 0 24 24" fill="white" width="22" height="22"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+      </div>
+      <div class="link-text">
+        <div class="link-name">Instagram</div>
+        <div class="link-handle">@abd.erraouf12</div>
+      </div>
+      <div class="arrow">→</div>
+    </a>
 
-    def setup_starting_position(self):
-        # وضع القطع في البداية
-        # صف الأسود الأعلى (row 0)
-        order = [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]
-        for i, cls in enumerate(order):
-            self.grid[0][i] = cls('b')
-            self.grid[7][i] = cls('w')
-        # البيادق
-        for i in range(8):
-            self.grid[1][i] = Pawn('b')
-            self.grid[6][i] = Pawn('w')
+    <a href="https://tiktok.com/@abd.erraouf46" class="link-btn tt" target="_blank">
+      <div class="icon-wrap">
+        <svg class="tiktok-icon" viewBox="0 0 24 24" fill="white"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.84a8.2 8.2 0 004.79 1.53V6.93a4.85 4.85 0 01-1.02-.24z"/></svg>
+      </div>
+      <div class="link-text">
+        <div class="link-name">TikTok</div>
+        <div class="link-handle">@abd.erraouf46</div>
+      </div>
+      <div class="arrow">→</div>
+    </a>
 
-    def move_piece(self, sx, sy, tx, ty, promotion_choice=None):
-        """
-        ينفذ نقلة من (sx,sy) إلى (tx,ty) مع التعامل مع التبييت، الأسر بالتجاوز، وترقية البيدق.
-        يعيد dict يصف ما حدث (captured, castling, en_passant, promotion)
-        """
-        piece = self.grid[sy][sx]
-        target = self.grid[ty][tx]
-        result = {'captured': target, 'castling': False, 'en_passant': False, 'promotion': False}
-        # التبييت
-        if isinstance(piece, King) and abs(tx - sx) == 2:
-            # قلعة
-            if tx > sx:
-                # جهة الملك
-                rook_from_x = 7
-                rook_to_x = tx - 1
-            else:
-                rook_from_x = 0
-                rook_to_x = tx + 1
-            self.grid[sy][rook_to_x] = self.grid[sy][rook_from_x]
-            self.grid[sy][rook_from_x] = None
-            self.grid[sy][tx] = piece
-            self.grid[sy][sx] = None
-            piece.has_moved = True
-            self.grid[sy][rook_to_x].has_moved = True
-            result['castling'] = True
-            # بعد التبييت لا يوجد en passant
-            self.en_passant_target = None
-            return result
+  </div>
+</div>
 
-        # الأسر بالتجاوز
-        if isinstance(piece, Pawn) and self.en_passant_target == (tx, ty) and target is None:
-            # المربع الهدف كان فارغًا لكن يمكن أكل البيدق الذي تحرك خطوتين
-            captured_pawn_y = sy
-            captured_pawn_x = tx
-            result['captured'] = self.grid[captured_pawn_y][captured_pawn_x]
-            self.grid[captured_pawn_y][captured_pawn_x] = None
-            result['en_passant'] = True
-
-        # تنفيذ النقل العادي
-        self.grid[ty][tx] = piece
-        self.grid[sy][sx] = None
-
-        # تحديث en_passant_target: إذا تحرك بيدق خطوتين
-        if isinstance(piece, Pawn) and abs(ty - sy) == 2:
-            mid_y = (ty + sy) // 2
-            self.en_passant_target = (tx, mid_y)
-        else:
-            self.en_passant_target = None
-
-        # ترقية البيدق
-        if isinstance(piece, Pawn):
-            if (piece.color == 'w' and ty == 0) or (piece.color == 'b' and ty == 7):
-                # ترقية: نسمح باختيار القطعة عبر promotion_choice (Q,R,B,N)
-                if promotion_choice is None:
-                    # افتراضيًا ملكة
-                    promotion_choice = 'Q'
-                promoted = {'Q': Queen, 'R': Rook, 'B': Bishop, 'N': Knight}[promotion_choice]
-                self.grid[ty][tx] = promoted(piece.color)
-                result['promotion'] = True
-
-        piece.has_moved = True
-        return result
-
-    def find_king(self, color):
-        for y in range(8):
-            for x in range(8):
-                p = self.grid[y][x]
-                if isinstance(p, King) and p.color == color:
-                    return x, y
-        return None
-
-    def is_square_attacked(self, x, y, by_color):
-        # هل المربع (x,y) مهدد من قبل أي قطعة للون by_color؟
-        for ry in range(8):
-            for rx in range(8):
-                p = self.grid[ry][rx]
-                if p and p.color == by_color:
-                    # للحصول على الحركات النظرية للقطعة
-                    for mx, my in p.possible_moves(self, rx, ry):
-                        if mx == x and my == y:
-                            # ملاحظة: بعض الحركات (مثل البيدق) تعتمد على سياق (أكل/أمام)
-                            # لكن possible_moves لدينا يعالج ذلك بما فيه الكفاية
-                            return True
-        return False
-
-    def is_in_check(self, color):
-        king_pos = self.find_king(color)
-        if not king_pos:
-            return False
-        kx, ky = king_pos
-        return self.is_square_attacked(kx, ky, 'b' if color == 'w' else 'w')
-
-    def generate_legal_moves_for(self, x, y):
-        """
-        يعيد قائمة النقلات القانونية لقطعة في (x,y) بعد استبعاد النقلات التي تضع الملك في كش.
-        """
-        piece = self.grid[y][x]
-        if not piece:
-            return []
-        moves = piece.possible_moves(self, x, y)
-        legal = []
-        for tx, ty in moves:
-            # ننسخ اللوحة وننفذ النقل مؤقتًا للتحقق من الكش
-            temp = deepcopy(self)
-            temp.move_piece(x, y, tx, ty)
-            if not temp.is_in_check(piece.color):
-                legal.append((tx, ty))
-        return legal
-
-    def has_any_legal_move(self, color):
-        for y in range(8):
-            for x in range(8):
-                p = self.grid[y][x]
-                if p and p.color == color:
-                    if self.generate_legal_moves_for(x, y):
-                        return True
-        return False
-
-# =========================
-# محرك اللعبة (GameEngine)
-# =========================
-class GameEngine:
-    def __init__(self):
-        self.board = Board()
-        self.turn = 'w'  # 'w' أو 'b'
-        self.move_history = []  # قائمة من السلاسل النصية لوصف النقلات
-        self.selected = None  # (x,y) المربع المحدد
-        self.legal_moves_cache = []  # حركات محددة للقطعة المحددة
-        self.game_over = False
-        self.winner = None
-        self.result_text = ""
-
-    def select_square(self, x, y):
-        if self.game_over:
-            return "اللعبة انتهت."
-        piece = self.board.grid[y][x]
-        if piece is None:
-            # نسمح بإلغاء التحديد إذا نقر اللاعب على مربع فارغ
-            self.selected = None
-            self.legal_moves_cache = []
-            return "لم يتم اختيار قطعة (مربع فارغ)."
-        if piece.color != self.turn:
-            return "ليس دور هذه القطعة."
-        self.selected = (x, y)
-        self.legal_moves_cache = self.board.generate_legal_moves_for(x, y)
-        if not self.legal_moves_cache:
-            return "لا توجد نقلات قانونية لهذه القطعة."
-        return f"قطعة مختارة: {piece.symbol()} في {x},{y}"
-
-    def attempt_move(self, tx, ty, promotion_choice=None):
-        if self.selected is None:
-            return "لم يتم اختيار قطعة."
-        sx, sy = self.selected
-        if (tx, ty) not in self.legal_moves_cache:
-            return "نقلة غير قانونية."
-        piece = self.board.grid[sy][sx]
-        # تنفيذ النقل
-        result = self.board.move_piece(sx, sy, tx, ty, promotion_choice=promotion_choice)
-        # سجل النقل (بصيغة مبسطة)
-        move_notation = self._format_move_notation(piece, sx, sy, tx, ty, result)
-        self.move_history.append(move_notation)
-        # تحديث الدور
-        self.turn = 'b' if self.turn == 'w' else 'w'
-        # تحديث أرقام الحركة
-        if self.turn == 'w':
-            self.board.fullmove_number += 1
-        # إعادة تعيين التحديد
-        self.selected = None
-        self.legal_moves_cache = []
-        # فحص حالات اللعبة
-        self._update_game_state()
-        return "نقلة ناجحة."
-
-    def _format_move_notation(self, piece, sx, sy, tx, ty, result):
-        # صيغة مبسطة: e2e4 أو مع علامة x عند أكل
-        cols = 'abcdefgh'
-        from_sq = f"{cols[sx]}{8 - sy}"
-        to_sq = f"{cols[tx]}{8 - ty}"
-        capture = 'x' if result['captured'] else '-'
-        promo = ''
-        if result['promotion']:
-            promo = '=Q'
-        return f"{piece.symbol()}{from_sq}{capture}{to_sq}{promo}"
-
-    def _update_game_state(self):
-        # تحقق من كش، كش مات، تعادل
-        if self.board.is_in_check(self.turn):
-            # هل هناك أي نقلة قانونية للهروب؟
-            if not self.board.has_any_legal_move(self.turn):
-                self.game_over = True
-                self.winner = 'w' if self.turn == 'b' else 'b'
-                self.result_text = f"كش مات! الفائز: {'أبيض' if self.winner=='w' else 'أسود'}"
-            else:
-                self.result_text = f"كش على {'الأبيض' if self.turn=='w' else 'الأسود'}"
-        else:
-            # ليس في كش؛ هل هناك أي نقلة قانونية؟
-            if not self.board.has_any_legal_move(self.turn):
-                self.game_over = True
-                self.winner = None
-                self.result_text = "تعادل (Stalemate)."
-            else:
-                self.result_text = ""
-
-# =========================
-# واجهة Pygame
-# =========================
-def draw_board(screen, board: Board, selected, legal_moves, engine: GameEngine):
-    # رسم المربعات
-    for y in range(8):
-        for x in range(8):
-            rect = pygame.Rect(x*SQUARE_SIZE, y*SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE)
-            if (x + y) % 2 == 0:
-                color = WHITE
-            else:
-                color = BLACK
-            pygame.draw.rect(screen, color, rect)
-    # تمييز المربعات القانونية
-    s = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
-    s.fill(MOVE_HIGHLIGHT)
-    for (mx, my) in legal_moves:
-        screen.blit(s, (mx*SQUARE_SIZE, my*SQUARE_SIZE))
-    # تمييز المربع المحدد
-    if selected:
-        sx, sy = selected
-        s2 = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
-        s2.fill(SELECT_COLOR)
-        screen.blit(s2, (sx*SQUARE_SIZE, sy*SQUARE_SIZE))
-    # رسم القطع كرموز نصية
-    for y in range(8):
-        for x in range(8):
-            p = board.grid[y][x]
-            if p:
-                text = FONT.render(p.symbol(), True, (0,0,0) if p.color=='w' else (255,255,255))
-                tx, ty = coord_to_pos((x,y))
-                # توسيط النص
-                text_rect = text.get_rect(center=(tx + SQUARE_SIZE//2, ty + SQUARE_SIZE//2))
-                screen.blit(text, text_rect)
-    # إذا كان الملك في كش، نضع تمييزًا
-    for color in ('w','b'):
-        if board.is_in_check(color):
-            kx, ky = board.find_king(color)
-            s3 = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
-            s3.fill(CHECK_COLOR)
-            screen.blit(s3, (kx*SQUARE_SIZE, ky*SQUARE_SIZE))
-    # رسم سجل التحركات على الجانب
-def draw_ui(screen, engine: GameEngine):
-    # شريط جانبي لعرض الدور وسجل التحركات والنتيجة
-    sidebar_width = 240
-    sidebar_x = WIDTH
-    # خلفية
-    rect = pygame.Rect(WIDTH, 0, sidebar_width, HEIGHT)
-    pygame.draw.rect(screen, (200,200,200), rect)
-    # دور اللاعب
-    turn_text = "دور: أبيض" if engine.turn == 'w' else "دور: أسود"
-    t_surf = FONT.render(turn_text, True, (0,0,0))
-    screen.blit(t_surf, (WIDTH + 10, 10))
-    # نتيجة أو رسالة
-    if engine.result_text:
-        r_surf = SMALL_FONT.render(engine.result_text, True, (200,0,0))
-        screen.blit(r_surf, (WIDTH + 10, 50))
-    # سجل التحركات
-    mh_title = SMALL_FONT.render("سجل التحركات:", True, (0,0,0))
-    screen.blit(mh_title, (WIDTH + 10, 90))
-    y = 120
-    for i, mv in enumerate(engine.move_history[-20:]):  # آخر 20 نقلة
-        mv_surf = SMALL_FONT.render(f"{i+1}. {mv}", True, (0,0,0))
-        screen.blit(mv_surf, (WIDTH + 10, y))
-        y += 20
-
-def promotion_dialog(screen, color):
-    # نافذة بسيطة لاختيار ترقية البيدق (Q,R,B,N)
-    # نعرض 4 أزرار وننتظر اختيار المستخدم
-    choices = ['Q','R','B','N']
-    w, h = 300, 120
-    x = (WIDTH - w)//2
-    y = (HEIGHT - h)//2
-    dialog = pygame.Rect(x, y, w, h)
-    pygame.draw.rect(screen, (240,240,240), dialog)
-    pygame.draw.rect(screen, (0,0,0), dialog, 2)
-    title = SMALL_FONT.render("اختر ترقية البيدق", True, (0,0,0))
-    screen.blit(title, (x + 10, y + 10))
-    btns = []
-    for i, c in enumerate(choices):
-        bx = x + 10 + i*(w-20)//4
-        by = y + 50
-        bw = (w-20)//4 - 10
-        bh = 40
-        btn = pygame.Rect(bx, by, bw, bh)
-        pygame.draw.rect(screen, (200,200,200), btn)
-        txt = FONT.render(c, True, (0,0,0))
-        screen.blit(txt, txt.get_rect(center=btn.center))
-        btns.append((btn, c))
-    pygame.display.flip()
-    while True:
-        for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
-                pygame.quit(); sys.exit()
-            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
-                mx, my = ev.pos
-                for btn, c in btns:
-                    if btn.collidepoint(mx, my):
-                        return c
-
-def main():
-    screen = pygame.display.set_mode((WIDTH + 240, HEIGHT))
-    pygame.display.set_caption("لعبة شطرنج - Local Multiplayer")
-    clock = pygame.time.Clock()
-    engine = GameEngine()
-
-    running = True
-    while running:
-        clock.tick(FPS)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mx, my = event.pos
-                if mx < WIDTH:
-                    cx, cy = pos_to_coord((mx, my))
-                    # إذا لم توجد قطعة محددة، نحاول اختيارها
-                    if engine.selected is None:
-                        msg = engine.select_square(cx, cy)
-                        # طباعة رسالة للمطور/للمستخدم في الكونسول
-                        print(msg)
-                    else:
-                        # محاولة تنفيذ نقلة
-                        # إذا كانت النقلة ترقية بيدق، نفتح حوار
-                        sx, sy = engine.selected
-                        piece = engine.board.grid[sy][sx]
-                        # تحقق من قانونية النقلة
-                        if (cx, cy) not in engine.legal_moves_cache:
-                            # إذا نقر على مربع فارغ غير قانوني: إلغاء التحديد أو رسالة
-                            msg = engine.select_square(cx, cy)  # يحاول اختيار جديد
-                            print("نقلة غير قانونية أو اختيار جديد:", msg)
-                        else:
-                            promotion_choice = None
-                            if isinstance(piece, Pawn) and ((piece.color=='w' and cy==0) or (piece.color=='b' and cy==7)):
-                                promotion_choice = promotion_dialog(screen, piece.color)
-                            msg = engine.attempt_move(cx, cy, promotion_choice=promotion_choice)
-                            print(msg)
-                else:
-                    # نقر على الشريط الجانبي: لا شيء حاليًا
-                    pass
-
-        # رسم
-        screen.fill((100,100,100))
-        draw_board(screen, engine.board, engine.selected, engine.legal_moves_cache, engine)
-        draw_ui(screen, engine)
-        pygame.display.flip()
-
-        # إذا انتهت اللعبة، نعرض رسالة وننتظر إغلاق النافذة أو إعادة تشغيل (هنا نعرض فقط)
-        if engine.game_over:
-            print("اللعبة انتهت:", engine.result_text)
-
-    pygame.quit()
-
-if __name__ == "__main__":
-    main()
-
-                
+</body>
+</html>
